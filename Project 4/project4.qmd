@@ -1,0 +1,195 @@
+---
+title: "Can you Predict That?"
+subtitle: "Course DS 250"
+author: "Jaxon Hamm"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: "#00d0ff"
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+    
+---
+
+```{python}
+#| label: libraries
+#| include: false
+
+# Imports
+import pandas as pd
+import altair as alt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import metrics
+
+
+```
+
+
+## Elevator pitch
+
+_paste your elevator pitch here_
+
+```{python}
+#| label: project data
+#| code-summary: Read and format project data
+
+# Read Data
+dwellings = pd.read_csv("dwellings_ml.csv")
+dwellings_neighborhoods = pd.read_csv("dwellings_neighborhoods_ml.csv")
+```
+
+__We will be looking at how Machine learning can be used to predict data. First potential relationships will be explored in our data. Then a model will be created to predict the whether homes were built before or after 1980. The model will be explained and justified.__
+
+## Potential Relationships
+
+__What are the potential relationships between variables within the dataset?__
+
+_At first glance it doesn't particulary look like there is really all that much of a relationship in the data. I looked at various variables and it seemed that there really wasn't much of a correlation as to when certain homes may have been built. It does appear that there would be some soft indicators though. It appears that higher selling prices are more likely after 1980, as well as larger square footage of basements. This may have to do with economics and improved technology combined. Ultimatley it appears that many variables in conjunction can point to a house being built before or after 1980._
+
+```{python}
+#| label: GQ1 chart 1
+#| code-summary: Plot Selling price to years.
+#| fig-cap: "Selling Price in relation to year built"
+#| fig-align: center
+
+# Get correclty sized random sample
+relation_sample = dwellings.sample(n=4999, random_state=345)
+
+# Chart data
+sp_chart = alt.Chart(relation_sample, title="Selling Price in Relation to Year Constructed").mark_circle(size=60, clip=True).encode(
+    alt.X('yrbuilt:Q',
+        axis=alt.Axis(format = "d"),
+        scale=alt.Scale(zero=False),
+        title="Year Built"
+    ),
+    alt.Y('sprice:Q',
+        scale=alt.Scale(domain=(0, 2500000)),
+        title="Selling Price"    
+    )
+)
+
+sp_chart
+```
+
+
+```{python}
+#| label: GQ1 chart 2
+#| code-summary: Plot finished basements to years.
+#| fig-cap: "Finished basements in relation to year built"
+#| fig-align: center
+
+# Chart data
+finbsmnt_chart = alt.Chart(relation_sample, title="Finished Basement Square Footage in Relation to Year Constructed").mark_circle(size=60, clip=True).encode(
+    alt.X('yrbuilt:Q',
+        axis=alt.Axis(format = "d"),
+        scale=alt.Scale(zero=False),
+        title="Year Built"
+    ),
+    alt.Y('finbsmnt:Q',
+        scale=alt.Scale(zero=False),
+        title="Finished Basement Square Footage"    
+    )
+)
+
+finbsmnt_chart
+
+
+```
+
+
+
+## Classification Model
+
+__Build a classification model labeling houses as being built “before 1980” or “during or after 1980”. Your goal is to reach or exceed 90% accuracy. Explain your final model choice (algorithm, tuning parameters, etc) and describe what other models you tried.__
+
+_The final model choice was the Random Forest. All other modifiers used scored less than 90 when predicting the desired data points. The worst of these classifiers was the GausianNB classifier, with a 65% accuracy. The Random classifier was the most accurate, with both high recall and precision. Without appending the neighborhood data to the list it was scoring around .90 all around. I then began to subtract variables from the initial data which seemed either to be inefective for predictions or seemed to be hindering the model. This brought it up to a 92%. I then appended the neighborhood data and the model now is around 96% accurate with high recall and precision._
+
+```{python}
+#| label: GQ2
+#| code-summary: Create Model
+
+# Create input columns
+drop = ["before1980", "parcel_x", "parcel_y", "abstrprd", "yrbuilt", "status_I", "status_V", "qualified_U", "qualified_Q", "smonth", "syear", "tasp"]
+x = dwellings
+x = x.merge(dwellings_neighborhoods, how='left', left_index=True, right_index=True)
+for col in drop:
+    x = x.loc[:, x.columns != col]
+
+# Create target column
+y = dwellings["before1980"]
+
+# Split it out into training and testing data
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = .33, random_state = 345)
+
+# Create the model and train it
+classifier = RandomForestClassifier(random_state=345)
+classifier.fit(x_train, y_train)
+
+# Get the predictions
+y_predictions = classifier.predict(x_test)
+
+# Get the metrics and display them
+accuracy = round(metrics.accuracy_score(y_test, y_predictions), 4)
+precision = round(metrics.precision_score(y_test, y_predictions), 4)
+recall = round(metrics.recall_score(y_test, y_predictions), 4)
+
+print(f"METRICS:\n Accuracy: {accuracy}\n Precision: {precision}\n Recall: {recall}\n")
+```
+
+## Model Explanation
+
+__Justify your classification model by discussing the most important features selected by your model. This discussion should include a chart and a description of the features.__
+
+_This model was able to accomplish the task of predicting if a house was built before 1980 with high accuracy. A large part of this is because of the large set of features that were used to weigh the option. Some of the most important factors that can be observed are the living area, the number of baths, and stories. I would most likely attribute this to how home development is done. Most houses are built around the same blueprint. This means that homes with similarities such as these would most likely be built around the same time or by the same people. This is not a complete giveaway though so other factors also play a large part. Things such as the architechture style denote a certain time period as well. Homes are generally built in a style that matches the times. Another point of data that sticks out to me though it seems to be broken up is the data relating to the neighborhood that a home was built in. It appers to play a really small factor, though if all added together we would see that the influence that the neighborhood has on the overall decision would across all the data be one of the largest contributing factors. This is because neighborhoods are essentially all built at once. Becuase the data was trained on homes where it knows if it the homes were built in 1980, it then can assume that houses built in the same neighborhood were built around the same time. Finally I see that netprice and selling price are very large contributing factors. I feel that this is because of the inversibility of an equation. By that I mean that the price of a home is determined by a number of factors, most of which are taken into account in this data. One of those is also the age of the home. Becuase the price of a home is determined in large part by other data, we can make estimations about the unkown factors (in this case the age of the home) using the price and other known pieces of data._
+
+```{python}
+#| label: GQ3
+#| code-summary: Get feature importance data frame
+#| feature_df = pd.DataFrame({'features':x.columns, 'importance':classifier.feature_importances_})
+
+feature_df = pd.DataFrame({'features':x.columns, 'importance':classifier.feature_importances_})
+
+feature_df_small = (feature_df.query("importance >= 0.01")
+    .sort_values(by='importance', ascending=False)
+)
+```
+
+
+```{python}
+#| label: GQ3 chart
+#| code-summary: Plot Feature importance
+#| fig-cap: "Plot of the feature importance in the model"
+#| fig-align: center
+
+
+bars = alt.Chart(feature_df_small, title="Random Forest Classifier Feature Importances").mark_bar().encode(
+    alt.X('importance:Q', title='Feature Importance'),
+    alt.Y('features:O', sort=alt.EncodingSortField(field="features", op="count", order='ascending'), title='Features')
+)
+
+bars
+```
+
+## Model Quality
+
+__Describe the quality of your classification model using 2-3 different evaluation metrics. You also need to explain how to interpret each of the evaluation metrics you use.__
+
+_This is a good model for prediction of the age of homes. This has a 95% accuracy. This means that on average 19 of the 20 houses checked will be constructed before 1980 and will likely have asbestos. It all has a high recall of .9693 meaning that it is sensitive to outlying data. It is also precise with a score of .9585 meaning that it is pulling in most of the homes that were built before 1980. With these factors combined I would say that these three metrics point to this being a valid model to be used for the purpose of determining if a home was built before 1980._

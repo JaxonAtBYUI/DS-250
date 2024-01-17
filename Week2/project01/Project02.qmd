@@ -1,0 +1,205 @@
+---
+title: "What's in a Name?"
+subtitle: "Course DS 250"
+author: "Jaxon Hamm"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: "#008000"
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+    
+---
+
+```{python}
+#| label: libraries
+#| include: false
+import pandas as pd
+import altair as alt
+import numpy as np
+
+from IPython.display import Markdown
+from IPython.display import display
+from tabulate import tabulate
+```
+
+
+## Elevator pitch
+
+_Everyone has names. These names give us an identity and can tell a lot about the time and culture that a person was a part of. Given the social climate of the time we are born we inherit some small part of that time in our names. Through analyzing name data, we can learn when major cultural shifts happened. We can also use this to predict the direction in which the culture is shifting. Finally, we can see the influence that certain event have on future generations._
+
+```{python}
+#| label: project data
+#| code-summary: Read and format data
+# Download name data
+dat = pd.read_csv("https://github.com/byuidatascience/data4names/raw/master/data-raw/names_year/names_year.csv")
+```
+
+__How does your name at your birth year compare to its use historically? Given someone's name over the phone are you able to determine a probable age? How have common christian names seen usage historically? Have influential movies affected the usage of certain names?__
+
+## GRAND QUESTION 1
+
+__How does your name at your birth year compare to its use historically?__
+
+_The name Jaxon is a new name that showed up relatively recently, appearing in the 1990s. It is an alternate spelling to the name Jackson.Being born in the year 2000, the name spelled specifically as Jaxon is relatively uncommon. It has been on an upward tren since it began to gain popularity around 1970._
+
+```{python}
+#| label: GQ1
+#| code-summary: Filter and format data
+
+# Filter data for the name "Jaxon"
+personal_name = dat.query("name == 'Jaxon'", engine="python")
+
+```
+
+_The upward trend of the name really begins in 1970, and it's popularity continues ot spik upwards increasingly rapidly until 2012. It is around 2012 where the rate of increase of the name Jaxon sharply drops off, though data continues to trend upward._
+
+```{python}
+#| label: GQ1 chart
+#| code-summary: Chart the historical usage of the name Jaxon.
+#| fig-cap: "The historical usage of the name Jaxon"
+#| fig-align: center
+
+# Chart the usage of the name Jaxon over time.
+personal_chart = alt.Chart(personal_name, title="Popularity of the Name Jaxon").mark_area(
+    line={'color':'darkgreen'},
+    color=alt.Gradient(
+        gradient='linear',
+        stops=[alt.GradientStop(color='white', offset=0),
+               alt.GradientStop(color='darkgreen', offset=1)],
+        x1=1,
+        x2=1,
+        y1=1,
+        y2=0
+    )
+    ).encode(
+    x= alt.X("year:O", axis = alt.Axis(format = "d", title="Year")),
+    y='Total'
+)
+
+personal_line = alt.Chart(personal_name.query("year == 2000")).mark_rule().encode(x="year:O")
+
+personal_chart + personal_line
+```
+
+## GRAND QUESTION 2
+
+__If you talked to someone named Brittany on the phone, what is your guess of his or her age? What ages would you not guess?__
+
+_Given the name brittany, the most likely age of the person in question would be 32 years old. The safest range to guess would be 36-28. Ages that would not be good to guess are ages 22 or less, and 39 or older._
+
+```{python}
+#| label: GQ2
+#| code-summary: Filter and format data.
+
+# Filter for the name "Brittany"
+brittany = (dat.query("name == 'Brittany'")
+            .filter(items=["name", "year", "Total"]))
+
+```
+
+_There is almost a bell curve shape when looking at the usage of the name Brittany over time. The height of popularity for this name is 1990. Following the curve the popularity "drops off" dramatically before 1985 and has a steady decline from 1994 to 2001._
+
+```{python}
+#| label: GQ2 chart
+#| code-summary: Chart the historical usage of the name Brittany.
+#| fig-cap: "The historical usage of the name Brittany"
+#| fig-align: center
+
+# Chart the historical usage of the name Brittany.
+alt.Chart(brittany, title="Popularity of the name Brittany").mark_bar(color="darkgreen").encode(
+    x= alt.X("year:O", axis = alt.Axis(format = "d", title="Year")),
+    y= alt.Y("Total"))
+```
+
+
+## GRAND QUESTION 3
+
+__Mary, Martha, Peter, and Paul are all Christian names. From 1920 - 2000, compare the name usage of each of the four names. What trends do you notice?__
+
+_There are two distinct trends in this data. Most noticible is the use of the name being many times more popular than other christian names between 1910 and 1968. Other names seem to rise slowly over time, and I would imagine most likely are following the increase in population. This continues until around the 1950s where trends seem to begin to reverse. The most noticible is the name Mary, dropping rapidly and converging with other Christian names, where usage for all plotted names slowly peters out to under 5000 a year and all names seem to trend downward._
+
+```{python}
+#| label: GQ3
+#| code-summary: Filter and format data.
+
+# Filter for the names, "Mary", "Martha", "Paul", and "Peter".
+christian = (dat.query("name == 'Mary' or name == 'Martha' or name == 'Peter' or name == 'Paul'")
+            .filter(items=["name", "year", "Total"]))
+
+```
+
+_Mary has a seeming Bimodal distribution, which may indicate that some form of cultural event or influence happened to revive the popularity of the name Mary. The other names gradually rise, then fall back down to near where they started._
+
+```{python}
+#| label: GQ3 chart
+#| code-summary: Chart the historical usage of christian names.
+#| fig-cap: "The historical usage of christian names."
+#| fig-align: center
+# Include and execute your code here
+alt.Chart(christian, title="Usage of Christian Names").mark_line().encode(
+    x= alt.X("year:O", axis = alt.Axis(format = "d", title="Year")),
+    y= alt.Y("Total"),
+    color=alt.Color('name', legend=alt.Legend(title="Christian Names"))
+)
+```
+
+## GRAND QUESTION 4
+
+__Think of a unique name from a famous movie. Plot the usage of that name and see how changes line up with the movie release. Does it look like the movie had an effect on usage?__
+
+_Bouncing off of the previous grand question, a popular character from an influential movie, Luke Skywalker, is an intersting case. Unlike the other christian names, Luke is not used much at all until around 1954 to about 1970 where it begins to become more popular. The release of Star wars is in 1977. It seems around this time it was already gaining in popularity but maintains the momentum from 1977 to 1980. This could be attributed to the movie, but it is seemingly inconclusive as their were already upward trends. The second movie was release in 1980 and there is no visible effect, and the same goes for the third movie in 1983._
+
+```{python}
+#| label: GQ4
+#| code-summary: Filter and format data.
+
+# Filter for the name "Luke".
+movie_name = dat.query('name.str.startswith("Luke")', engine="python")
+
+```
+
+_The chart trends upward sharply around 1976, slowing in 1980. It then begins to rise rapidly in 1991, and continues to rise into 2006, once again seeming to level off around this time._
+
+```{python}
+#| label: GQ4 chart
+#| code-summary: Chart the historical usage of the name Luke.
+#| fig-cap: "The historical usage of the name Luke."
+#| fig-align: center
+
+# Chart the historical usage of the name Luke.
+movie_chart = alt.Chart(movie_name, title="Usage of the Name Luke with Reference to the Release of the Original Star Wars Trilogy.").mark_area(
+    line={'color':'darkgreen'},
+    color=alt.Gradient(
+        gradient='linear',
+        stops=[alt.GradientStop(color='white', offset=0),
+               alt.GradientStop(color='darkgreen', offset=1)],
+        x1=1,
+        x2=1,
+        y1=1,
+        y2=0
+    )
+    ).encode(
+    x= alt.X("year:O", axis = alt.Axis(format = "d", title="Year")),
+    y='Total'
+    )
+
+movie_line1 = alt.Chart(movie_name.query("year == 1977")).mark_rule().encode(x="year:O")
+movie_line2 = alt.Chart(movie_name.query("year == 1980")).mark_rule().encode(x="year:O")
+movie_line3 = alt.Chart(movie_name.query("year == 1983")).mark_rule().encode(x="year:O")
+
+movie_chart + movie_line1 + movie_line2 + movie_line3
+
+```

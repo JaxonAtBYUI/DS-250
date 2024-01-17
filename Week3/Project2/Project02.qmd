@@ -1,0 +1,240 @@
+---
+title: "Late Flights and Missing Data"
+subtitle: "Course DS 250"
+author: "Jaxon Hamm"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: "#752687"
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    execute: 
+        warning: false
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+    
+---
+
+```{python}
+#| label: libraries
+#| include: false
+
+import pandas as pd
+import altair as alt
+import numpy as np
+import json
+
+from IPython.display import Markdown
+from IPython.display import display
+from tabulate import tabulate
+```
+
+## Elevator pitch
+
+_It seems that everyone remembers negative experiences over positive experiences, and airports are no exception. It seems that everyone who has flown multiple times has a story about being delayed at an aiport. There are a variety of reasons but with proper planning you can ensure that you have the best chances of avoiding delays. Not only can you maximize your chances of avoiding a delay, but if that inevitable time comes, you can predict about how long that delay will be._
+
+
+## Repair Data
+
+```{python}
+#| label: project data
+#| code-summary: Read and format project data
+
+# Read Data
+data = pd.read_json("./flights_missing.json")
+
+```
+
+__There are some errors in the data at this point. There are missing values and labels. On top of this, Weather Delays have been in part absorbed into other categories. Here we will homogenize errors and missing data to make the data more friendly to use.__
+
+_There are a slew of errors in this data. There are missing cells. There are invalid values in cells (such as negative flight delays). There are dates missing. To repair the data we will set invalid values to NaN. After doing this we will go through columns that have apt data to summarize and fill their values with the median._
+
+```{python}
+#| label: Repair
+#| code-summary: Repair
+
+# TODO repair the data
+
+flights = (data
+    # generic data fixing
+    .replace(-999, np.nan)
+    .replace("1500+", "1500")
+    .replace("n/a", np.nan)
+    .replace("Febuary", "February")
+    .replace("", np.nan)
+    .assign(
+        num_of_delays_carrier = lambda x: x.num_of_delays_carrier.astype(int)
+    )
+)
+# Specific Column Repairs
+flights[['num_of_delays_late_aircraft']] = flights[['num_of_delays_late_aircraft']].fillna(value=flights['num_of_delays_late_aircraft'].median())
+
+flights[['minutes_delayed_carrier']] = flights[['minutes_delayed_carrier']].fillna(value=flights['minutes_delayed_carrier'].median())
+
+flights[['minutes_delayed_nas']] = flights[['minutes_delayed_nas']].fillna(value=flights['minutes_delayed_nas'].median())
+
+```
+
+_This is an example of what our new data looks like._
+
+```{python}
+#| label: GQ5 table
+#| code-summary: Generate Example of repaired data.
+#| tbl-cap: "Example of repaired data"
+#| tbl-cap-location: top
+
+flightString = flights.iloc[42].to_json(orient='index')
+
+print(json.dumps(json.loads(flightString), indent=4))
+```
+
+__Is it possible to work around incomplete data, and answer the following questions? Which airport has the worst delays? What is the best month to avoid delays in flights? What is the proportion of planes delayed by weather?__
+
+## Worst Delays
+
+__What airport has the worst delays, and by what metric is this measured?__
+
+_San Fransciso International Airport has the worst delays of the airports we have data on. There are two ways that you can measure this. The first is whether or not you will be delayed. This can be measured by the proportion of planes delayed. About one in four flights from SFO are delayed in some way. This is where the second method of measurment comes in. A delay can be anything from a minute to hours or days. This is the severity of the delay. Looking at the data we can clearly see that the average delay in hours is about a quarter. Putting this together we learn that about a quarter of the time that there is a flight from SFO, it is a quarter of an hour late. That is a large proportion of flights being delayed a significant amount of time. This leads me to conclued that the worst delays are at San Fransciso._
+
+```{python}
+#| label: GQ1
+#| code-summary: Format and Filter Data
+
+# Get relevant data
+worst_delays = (flights
+    .groupby("airport_code")
+    .agg(
+        sum_flights_total = ("num_of_flights_total", np.sum),
+        sum_flights_delayed = ("num_of_delays_total", np.sum),
+        sum_delay_time = ("minutes_delayed_total", np.sum)
+    )
+    .assign(
+        prop_delay = lambda x: x.sum_flights_delayed / x.sum_flights_total,
+        average_delay = lambda x: (x.sum_delay_time / 60) / x.sum_flights_total
+    )
+    .reset_index()
+)
+```
+
+_Here it is easy to see that the worst airport is SFO followed very cloesely by ORD. What is interesting is when you look at the amount of flights you would expect that as flights goes up, there would be less delays but it seems that is not true, as ATL has a much higher flight volume with a lower volume of delays. Not only this, but the delays are significantly shorter as well._
+
+```{python}
+#| label: GQ1 table
+#| code-summary: Tabulate flight statistics by airport
+#| tbl-cap: "Delayed Flight Statistics by Airport"
+#| tbl-cap-location: top
+
+# TODO Your answer should include a summary table that lists (for each airport) the total number of flights, total number of delayed flights, proportion of delayed flights, and average delay time in hours.
+display(worst_delays[["airport_code", "sum_flights_total", "sum_flights_delayed", "prop_delay", "average_delay"]])
+```
+
+
+## Best Month
+
+__What is the best month to fly if you want to avoid delays of any length?__
+
+_The best month to fly to avoid delays of any length is November, followed closely by September. Why this is is rather unclear however. It seems that on reason that September is a good option is because there would likely be less flights and thereby less strain on the system. This would logically make sense as there are no major holidays that people go home for around this time of year. November however throws a wrench in this interpretation as Thanksgiving is generally a dinner that familys gather for. I feel that more research would be needed to answer the why of this question._
+
+```{python}
+#| label: GQ2
+#| code-summary: Format and Filter Data
+
+# Get relevant data
+best_month = (flights
+    .groupby("month")
+    .agg(
+        sum_flights_delayed = ("num_of_delays_total", np.sum)
+    ).reset_index()
+)
+```
+
+_Here it is easy to see that November and September are the best months to fly with the lowest chance of being delayed. We also see the higher volume months June, July, and December._
+
+```{python}
+#| label: GQ2 chart
+#| code-summary: Plot delayed flights by month
+#| fig-cap: "Plot delayed flights by month"
+#| fig-align: center
+
+month_order = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+alt.Chart(best_month).mark_bar(color="#752687").encode(
+    x = alt.X("month", title="Month", sort = month_order),
+    y = alt.Y('sum_flights_delayed:Q', title="Delayed Flights")
+).properties(
+    title='Delayed Flights By Month'
+)
+
+```
+
+
+## Weather Delays
+
+__What is the proportion of planes delayed by weather?__
+
+_Here we see that the proportion of weather related delays from airport to airport vary from ~0.1 to ~0.04. The average is about .065. This varies greatly between airport and has more to do with location than the airport itself. Weather events are not an internal problem of the airport but rather is a question of location and envriornment. Regardless, if you desire to avoid getting delayed for weather, stear clear of San Franscisco International Airport. What is interesting is that it seems that a large portion of flights at SFO are delayed by weather and this may account for why SFO has such a high delay proportion in the first place
+_
+
+```{python}
+#| label: GQ3
+#| code-summary: Format and Filter Data
+
+# Get relevant data
+weather = (flights.assign(
+    severe = flights.num_of_delays_weather,
+    mild_late = .3 * flights.num_of_delays_late_aircraft,
+    mild_nas = np.where(flights.month.isin(["April", "May", "June", "July", "August"]),
+        .4*flights.num_of_delays_nas,
+        .65*flights.num_of_delays_nas),
+    total_weather = lambda x: x.severe + x.mild_late + x.mild_nas)
+)
+
+weather.total_weather = weather.total_weather.astype(int)
+
+weather_prop = (weather
+    .groupby("airport_code")
+    .agg(
+        sum_flights_total = ("num_of_flights_total", np.sum),
+        sum_weather = ("total_weather", np.sum)
+    )
+    .assign(
+    prop_delayed = lambda x: x.sum_weather / x.sum_flights_total
+    ).reset_index()
+)
+
+
+```
+
+_Mild weather delays are not counted in the weather delay category, but rather are counted in the NAS (National Airspace System) and Late Arriving Aircraft Category. Late arriving aircraft are delayed by mild weather at a rate of 30%. From April to August 40% of flights in the NAS category are delayed by weather, while the rest of the year it is actually 60. All weather delayed flights, and the appropriate quantities of flights will be summed together to create new data relating specifically to flight delays by weather events alone._
+
+```{python}
+#| label: GQ3 table
+#| code-summary: Table exemplifiying the repaired data
+#| tbl-cap: "Table of flights delayed by weather."
+#| tbl-cap-location: top
+
+weather_prop.head(5)
+
+```
+
+```{python}
+#| label: GQ3 chart
+#| code-summary: Plot proportion of flights delayed by weather
+#| fig-cap: "Proportion of Flights Delayed by Weather"
+#| fig-align: center
+
+alt.Chart(weather_prop).mark_bar(color="#752687").encode(
+    alt.X('airport_code', title="Airport Code", sort="-y"),
+    alt.Y('prop_delayed:Q', title="Proportion Delayed")
+)
+```

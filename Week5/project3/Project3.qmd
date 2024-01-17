@@ -1,0 +1,250 @@
+---
+title: "Finding Relationships in Baseball"
+subtitle: "Course DS 250"
+author: "Jaxon Hamm"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: "darkred"
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+    
+---
+
+```{python}
+#| label: libraries
+#| include: false
+
+import pandas as pd
+import altair as alt
+import numpy as np
+import sqlite3
+
+from IPython.display import Markdown
+from IPython.display import display
+from tabulate import tabulate
+```
+
+
+## KEY IDEAS
+
+_There is a number for just about everything that happens in baseball. With these numbers you can learn to predict performance, and see who the best players are. What schools produce the best players, what teams are on the rise or fall, and whether spending on teams has anything to do with performance are all trackable with the data we have._
+
+```{python}
+#| label: project data
+#| code-summary: Create connection to sqlite database.
+
+# Create connection.
+con = sqlite3.connect('lahmansbaseballdb.sqlite')
+```
+
+__We will be looking at what players attended BYU-I, what various player's batting averages are, and observing whether the total team salary has a relation to performance.__
+
+## PLAYERS WHO ATTENDED BYU-I
+
+__Who are the players in the database that have attended BYU-I?__
+
+_It appears that not players have attended BYUI. A major reason for this is the fact that there is no sports program at BYU-I._
+
+```{python}
+#| label: GQ1
+#| code-summary: Get data from database
+
+# Query the database.
+byuiPlayers = pd.read_sql_query(
+"""SELECT sa.playerID, sc.schoolID, sa.yearID, sa.teamID, MAX(sa.salary) AS salary 
+FROM Salaries AS sa
+    JOIN CollegePlaying AS cp
+        ON sa.playerID = cp.playerID
+    JOIN Schools AS sc
+        ON cp.schoolID = sc.schoolID
+WHERE sc.name_full = 'Brigham Young University-Idaho'
+GROUP BY sa.playerID
+ORDER BY salary DESC""", con)
+
+```
+
+_Only two players have originated from BYU-I._
+
+```{python}
+#| label: GQ1 table
+#| code-summary: Print out results of query.
+#| tbl-cap: "Players who attended BYU-I"
+#| tbl-cap-location: top
+
+# Print query out to table.
+display(byuiPlayers)
+
+```
+
+## BATTING AVERAGES
+
+__What is the batting average for those with at least one hit in a year? How about for ten bats in a year? What is the batting average of those with over 100 bats in their career?__
+
+_A fantastic batting average is a little over 1 in three hits for each at bat. This can only be accurately measured over an extended history. This is because if a given player only bats once and makes the hit, they will have a 1.000 batting average. This does not make them a good batter. In other words, to accurately asess a player's skill they must have a long performance history. Otherwise, peopel who have only been up to the plate 14 times appear to be twice as good as those who have been up to the plate 11436 times._
+
+_What is the batting average for those with at least one hit in a year?_
+
+```{python}
+#| label: GQ2-1
+#| code-summary: Get data from database
+
+# Query the database.
+ba1AB = pd.read_sql_query("""
+SELECT playerID, yearID, printf("%.3f", (CAST(H AS float)/ CAST(AB AS float))) AS battingAVG, H as hits, AB as atBats
+FROM Batting
+WHERE AB > 0
+ORDER BY battingAVG DESC, playerID
+""", con)
+
+```
+
+```{python}
+#| label: GQ2-1 Table
+#| code-summary: Print batting average to table.
+#| tbl-cap: "Batting average of players with at least one at bat in a year."
+#| tbl-cap-location: top
+
+# Print query out to table.
+ba1AB.head(5)
+
+```
+
+_How about for ten bats in a year?_
+
+```{python}
+#| label: GQ2-2
+#| code-summary: Get data from database
+
+# Query the database.
+ba10AB = pd.read_sql_query("""
+SELECT playerID, yearID, printf("%.3f", (CAST(H AS float)/ CAST(AB AS float))) AS battingAVG, H as hits, AB as atBats 
+FROM Batting
+WHERE AB > 9
+ORDER BY battingAVG DESC, playerID
+""", con)
+
+```
+
+```{python}
+#| label: GQ2-2 Table
+#| code-summary: Print batting average to table.
+#| tbl-cap: "Batting average of players with at least ten at bats in a year."
+#| tbl-cap-location: top
+
+# Print query out to table.
+ba10AB.head(5)
+
+```
+
+_What is the batting average of those with over 100 bats in their career?_
+
+```{python}
+#| label: GQ2-3
+#| code-summary: Get data from database
+
+# Query the database.
+baCareer = pd.read_sql_query("""
+SELECT 
+    playerID, 
+    printf("%.3f", (CAST(SUM(H) AS float)/ CAST(SUM(AB) AS float))) AS battingAVG,
+    SUM(H) AS hits,
+    SUM(AB) AS atBats 
+FROM Batting
+GROUP BY playerID
+HAVING atBats > 99
+ORDER BY battingAVG DESC, playerID
+""", con)
+
+```
+
+```{python}
+#| label: GQ2-3 Table
+#| code-summary: Print batting average to table.
+#| tbl-cap: "Career batting average of players with at least 100 at bats."
+#| tbl-cap-location: top
+
+# Print query out to table.
+baCareer.head(5)
+
+```
+
+## SUM TEAM SALARY AND WINS
+
+__Does the teams salary relate to performance in any way?__
+
+_From these graphs I would determine that there is not a correlation either between how often a team wins and their salary. I would also say that it does not appear that there is a correlation between winning and salary. For instance, we can see with the New York yankees that between the years of 1985 and 1990 their salary was increasing but the performance was dramatically decreasing. We also see that near the end of the data the Philadelphia Phillies overall salary tanks, and the Yankees increase in overall salary. Both teams have downward trending total wins though. It is easy to see looking at the graph that these two factors are not correlated._
+
+```{python}
+#| label: GQ3
+#| code-summary: Format and Filter Data
+
+# Query the database.
+sumTeamSalaries = pd.read_sql_query("""
+SELECT
+    yearID,
+    teamID, 
+    SUM(salary) AS teamSalary
+FROM Salaries
+WHERE teamID = "NYA" OR teamID = "PHI"
+GROUP BY yearID, teamID
+ORDER BY yearID
+""", con)
+
+wins = pd.read_sql_query("""
+SELECT 
+    teamID, 
+    yearID, 
+    W
+FROM Teams
+WHERE (teamID ="NYA" OR teamID="PHI") AND (yearID >= 1985 AND yearID <= 2016)
+ORDER BY yearID
+""", con)
+
+```
+
+_Both teams have salaries that trend upward overall. The yankees trend upward until about 2005 at which point it levels off. The Phillies stall at around that time but then continue to trend upward before tanking back down to where it was in in 2000._
+
+```{python}
+#| label: GQ3 chart-1
+#| code-summary: plot example
+#| fig-cap: "Sum of each team members salaries each year."
+#| fig-align: center
+
+# Chart Query
+sumTeamSalaries_chart = alt.Chart(sumTeamSalaries, title="Sum Salaries by Year").mark_line().encode(
+    x = alt.X("yearID:O", title="Year"),
+    y = alt.Y("teamSalary", title="Team Sum Salary"),
+    color = alt.Color('teamID', legend=alt.Legend(title="Teams"))
+)
+sumTeamSalaries_chart
+```
+
+_Both teams seem to have rather sporadic win rates. This is likely due to the fact that players on a team change frequently, and in ten years time an entire team can be shifted. A teams performance 20 years ago does not necessaril correlate to its performance now._
+
+```{python}
+#| label: GQ3 chart-2
+#| code-summary: Chart wins over the years for each team
+#| fig-cap: "Total wins by years"
+#| fig-align: center
+
+# Chart query.
+wins_chart = alt.Chart(wins, title="Wins each Year").mark_line().encode(
+    x = alt.X("yearID:O", title="Year"),
+    y = alt.Y("W", title="Wins"),
+    color = alt.Color('teamID', legend=alt.Legend(title="Teams"))
+)
+wins_chart
+```
